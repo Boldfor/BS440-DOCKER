@@ -1,18 +1,27 @@
-[BLE_Settings]
-# MAC address of the device to monitor (comma-separated if multiple)
-mac_address = D8:0B:CB:11:63:82
+FROM python:3.9-slim
 
-[Logging]
-# Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-level = INFO
+# Install required system packages including build dependencies
+RUN apt-get update && apt-get install -y \
+    bluetooth \
+    bluez \
+    python3-bluez \
+    build-essential \
+    gcc \
+    make \
+    libbluetooth-dev \
+    pkg-config \
+    libglib2.0-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-[Plugins]
-plugins = BS440mqtt
+# Create app directory
+WORKDIR /app
 
-[MQTT]
-host = localhost
-port = 1883
-username = 
-password = 
-prefix = medisana/bs440
-retain = True
+# Copy requirements first to leverage Docker cache
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the rest of the application
+COPY . .
+
+# Run the scanner script
+CMD ["python", "ble_scanner.py"]
