@@ -1,0 +1,14 @@
+services:
+  ble-scanner:
+    build: .
+    network_mode: host  # Required for Bluetooth access
+    privileged: true    # Required for Bluetooth access
+    volumes:
+      - ./BS440.ini:/app/BS440.ini
+      - /var/run/dbus:/var/run/dbus
+      - /var/run/bluetooth:/var/run/bluetooth
+    devices:
+      - /dev/bluetooth:/dev/bluetooth
+    environment:
+      - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
+    command: python3 -u ble_scanner.py
