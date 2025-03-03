@@ -23,12 +23,35 @@ class BS440mqtt(PluginBase):
         if self.mqtt_username and self.mqtt_password:
             self.client.username_pw_set(self.mqtt_username, self.mqtt_password)
         
+        # Set up callbacks for connection status
+        self.client.on_connect = self.on_connect
+        self.client.on_disconnect = self.on_disconnect
+        self.client.on_publish = self.on_publish
+        
         try:
+            self.logger.info(f"Connecting to MQTT broker at {self.mqtt_host}:{self.mqtt_port}")
             self.client.connect(self.mqtt_host, self.mqtt_port, 60)
             self.client.loop_start()
-            self.logger.info(f"Connected to MQTT broker at {self.mqtt_host}:{self.mqtt_port}")
         except Exception as e:
             self.logger.error(f"Failed to connect to MQTT broker: {str(e)}")
+    
+    def on_connect(self, client, userdata, flags, rc):
+        """Callback for when the client connects to the broker."""
+        if rc == 0:
+            self.logger.info(f"Successfully connected to MQTT broker at {self.mqtt_host}:{self.mqtt_port}")
+        else:
+            self.logger.error(f"Failed to connect to MQTT broker with result code {rc}")
+    
+    def on_disconnect(self, client, userdata, rc):
+        """Callback for when the client disconnects from the broker."""
+        if rc != 0:
+            self.logger.warning(f"Unexpected disconnection from MQTT broker: {rc}")
+        else:
+            self.logger.info("Disconnected from MQTT broker")
+    
+    def on_publish(self, client, userdata, mid):
+        """Callback for when a message is published."""
+        self.logger.debug(f"Message {mid} successfully published to MQTT broker")
     
     def __del__(self):
         """Clean up MQTT connection on object destruction."""
@@ -62,7 +85,15 @@ class BS440mqtt(PluginBase):
         payload = json.dumps(measurement)
         
         try:
-            self.client.publish(topic, payload, qos=self.mqtt_qos, retain=self.mqtt_retain)
-            self.logger.debug(f"Published to {topic}: {payload}")
+            self.logger.info(f"Publishing to MQTT: {topic}")
+            self.logger.info(f"Payload: {payload}")
+            result = self.client.publish(topic, payload, qos=self.mqtt_qos, retain=self.mqtt_retain)
+            
+            # Log detailed publish result
+            if result.rc == mqtt.MQTT_ERR_SUCCESS:
+                self.logger.info(f"Successfully published to {topic} (Message ID: {result.mid})")
+            else:
+                self.logger.error(f"Failed to publish to {topic}: Error code {result.rc}")
+                
         except Exception as e:
             self.logger.error(f"Failed to publish to MQTT: {str(e)}") 
