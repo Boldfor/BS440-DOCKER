@@ -1,15 +1,20 @@
 services:
   bs440-docker:
-    container_name: bs440-docker
-    build: .
+    container_name: bs440
+    build:
+      context: https://github.com/Boldfor/BS440-DOCKER.git
+      dockerfile: Dockerfile
     network_mode: host  # Required for Bluetooth access
     privileged: true    # Required for Bluetooth access
     volumes:
-      - ./config:/app/config  # Mount a directory instead of a single file
+      - data_bs440_config:/app/config  # Named volume for configuration
       - /var/run/dbus:/var/run/dbus
       - /var/run/bluetooth:/var/run/bluetooth
     devices:
       - /dev/bluetooth:/dev/bluetooth
     environment:
       - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
-    command: python3 -u ble_scanner.py
+    command: sh -c "cp -n /app/BS440.ini /app/config/ && python3 -u ble_scanner.py"
+
+volumes:
+  bs440_config:
