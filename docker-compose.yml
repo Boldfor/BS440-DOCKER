@@ -1,5 +1,6 @@
 services:
-  ble-scanner:
+  bs440-docker:
+    container_name: bs440-docker
     build: .
     network_mode: host  # Required for Bluetooth access
     privileged: true    # Required for Bluetooth access
