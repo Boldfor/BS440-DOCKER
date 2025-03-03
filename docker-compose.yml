@@ -4,7 +4,7 @@ services:
     network_mode: host  # Required for Bluetooth access
     privileged: true    # Required for Bluetooth access
     volumes:
-      - ./BS440.ini:/app/BS440.ini
+      - ./config:/app/config  # Mount a directory instead of a single file
       - /var/run/dbus:/var/run/dbus
       - /var/run/bluetooth:/var/run/bluetooth
     devices:

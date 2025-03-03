@@ -19,6 +19,7 @@ WORKDIR /app
 # Copy requirements first to leverage Docker cache
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+RUN pip3 install paho-mqtt
 
 # Copy the rest of the application
 COPY . .
