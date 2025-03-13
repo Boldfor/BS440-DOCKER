@@ -14,7 +14,11 @@ services:
       - /dev/bluetooth:/dev/bluetooth
     environment:
       - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
-    command: sh -c "cp -n /app/BS440.ini /app/config/ && python3 -u ble_scanner.py"
+    # This command:
+    # 1. Copies the default BS440.ini to the config volume (if it doesn't exist)
+    # 2. Changes working directory to /app/config so the script finds BS440.ini there
+    # 3. Runs the Python script with the full path to ensure it can find its modules
+    command: sh -c "cp -n /app/BS440.ini /app/config/ && cd /app/config && python3 -u /app/ble_scanner.py"
 
 volumes:
   bs440_config:

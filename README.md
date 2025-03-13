@@ -48,7 +48,7 @@ This project provides a containerized solution for connecting to Medisana scales
 
 ## Configuration
 
-Edit the `BS440.ini` file to configure:
+After deploying the container, edit the `BS440.ini` file under /app/config/ to configure:
 
 ```ini
 [BLE_Settings]
@@ -65,8 +65,8 @@ plugins = BS440mqtt
 [MQTT]
 host = localhost
 port = 1883
-username = 
-password = 
+username = your_mqtt_username
+password = your_mqtt_password
 prefix = medisana/bs440
 retain = True
 qos = 0
