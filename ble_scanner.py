@@ -34,9 +34,10 @@ def load_plugins(config, logger):
     plugins = []
     
     # Ensure plugins directory is in the Python path
-    plugins_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'plugins')
-    if plugins_dir not in sys.path:
-        sys.path.insert(0, plugins_dir)
+    # Add the parent directory so we can import plugins as a package
+    parent_dir = os.path.dirname(os.path.abspath(__file__))
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
     
     # Get enabled plugins from config
     plugin_names = config.get('Plugins', 'plugins', fallback='').split(',')
@@ -44,14 +45,17 @@ def load_plugins(config, logger):
     
     for plugin_name in plugin_names:
         try:
+            logger.info(f"Attempting to load plugin: {plugin_name}")
             module_name = f"plugins.{plugin_name.lower()}"
+            logger.debug(f"Importing module: {module_name}")
             module = importlib.import_module(module_name)
             plugin_class = getattr(module, plugin_name)
+            logger.debug(f"Instantiating plugin class: {plugin_name}")
             plugin = plugin_class(config, logger)
             plugins.append(plugin)
-            logger.info(f"Loaded plugin: {plugin_name}")
+            logger.info(f"Successfully loaded plugin: {plugin_name}")
         except Exception as e:
-            logger.error(f"Failed to load plugin {plugin_name}: {str(e)}")
+            logger.error(f"Failed to load plugin {plugin_name}: {str(e)}", exc_info=True)
     
     return plugins
 
@@ -63,6 +67,36 @@ class BLEScanner(btle.DefaultDelegate):
         self.scanner = btle.Scanner()
         self.medisana = MedisanaBS440(logger)
         self.plugins = []
+        self.measurements = []  # Store measurements for processing
+    
+    def _process_collected_measurements(self):
+        """Process all collected measurements with plugins."""
+        self.logger.info(f"Collection complete. Total measurements received: {len(self.measurements)}")
+        if self.measurements:
+            measurement_types = {}
+            for m in self.measurements:
+                mtype = m.get('type', 'unknown')
+                measurement_types[mtype] = measurement_types.get(mtype, 0) + 1
+            self.logger.info(f"Measurement breakdown: {measurement_types}")
+        
+        # Process all collected measurements with plugins (batch processing)
+        # Note: We pass measurements in the order received, not sorted by timestamp,
+        # because timestamps from the scale can be corrupted. The last measurement
+        # received is the most recent.
+        if self.plugins and self.measurements:
+            self.logger.info(f"Processing {len(self.measurements)} measurements with {len(self.plugins)} plugin(s)")
+            
+            for plugin in self.plugins:
+                try:
+                    self.logger.info(f"Batch processing measurements with plugin: {plugin.name}")
+                    plugin.process_measurements(self.measurements)
+                    self.logger.info(f"Successfully batch processed measurements with plugin: {plugin.name}")
+                except Exception as e:
+                    self.logger.error(f"Error in plugin {plugin.name} during batch processing: {str(e)}", exc_info=True)
+        elif self.plugins:
+            self.logger.warning(f"Plugins loaded ({len(self.plugins)}) but no measurements to process")
+        elif not self.plugins:
+            self.logger.warning("No plugins loaded - measurements will not be processed")
     
     def handleNotification(self, handle, data):
         """Handle incoming notifications from the scale"""
@@ -70,6 +104,11 @@ class BLEScanner(btle.DefaultDelegate):
         measurement = self.medisana.parse_measurement(data)
         if measurement:
             self.logger.info(f"Processed measurement: {measurement}")
+            # Store measurement for later processing
+            self.measurements.append(measurement)
+            self.logger.debug(f"Stored measurement (total: {len(self.measurements)})")
+        else:
+            self.logger.debug("Measurement parsing returned None, skipping")
 
     def connect_to_device(self, device_addr):
         """Returns True if connection and data exchange was successful"""
@@ -127,36 +166,43 @@ class BLEScanner(btle.DefaultDelegate):
                                 
                                 timeout = 30  # Seconds
                                 self.logger.info(f"Waiting for {timeout} seconds to receive all stored measurements...")
+                                # Clear measurements list for this connection session
+                                self.measurements = []
                                 start_time = time.time()
-                                while time.time() - start_time < timeout:
-                                    if peripheral.waitForNotifications(1.0):
-                                        # Notifications received, continue waiting
-                                        continue
-                                    # No notifications received for 1 second, but keep waiting until timeout
-                                
-                                # After receiving all measurements, process with plugins
-                                if hasattr(self, 'plugins') and self.plugins and hasattr(self.medisana, 'measurements'):
-                                    sorted_measurements = sorted(
-                                        self.medisana.measurements,
-                                        key=lambda k: k.get('timestamp', datetime.min),
-                                        reverse=True
-                                    )
-                                    
-                                    for plugin in self.plugins:
+                                try:
+                                    while time.time() - start_time < timeout:
                                         try:
-                                            plugin.process_measurements(sorted_measurements)
+                                            if peripheral.waitForNotifications(1.0):
+                                                # Notifications received, continue waiting
+                                                continue
+                                            # No notifications received for 1 second, but keep waiting until timeout
+                                        except btle.BTLEDisconnectError:
+                                            self.logger.warning("Device disconnected during measurement collection, processing collected measurements")
+                                            break
                                         except Exception as e:
-                                            self.logger.error(f"Error in plugin {plugin.name}: {str(e)}")
+                                            self.logger.warning(f"Error waiting for notifications: {str(e)}, processing collected measurements")
+                                            break
+                                except Exception as e:
+                                    self.logger.warning(f"Exception during measurement collection: {str(e)}, processing collected measurements")
+                                
+                                # After receiving all measurements, log summary and process batch if needed
+                                self._process_collected_measurements()
 
                 finally:
-                    self.logger.debug("Attempting to disconnect...")
-                    peripheral.disconnect()
-                    self.logger.info("Disconnected from device")
+                    try:
+                        self.logger.debug("Attempting to disconnect...")
+                        peripheral.disconnect()
+                        self.logger.info("Disconnected from device")
+                    except:
+                        pass  # Ignore disconnect errors
                 
                 return True  # Successfully completed
                 
             except btle.BTLEDisconnectError as e:
                 self.logger.warning(f"Device disconnected during attempt {attempt + 1}: {str(e)}")
+                # Process any measurements collected before disconnect
+                if self.measurements:
+                    self._process_collected_measurements()
                 time.sleep(1)  # Wait before retry
             except btle.BTLEException as e:
                 self.logger.warning(f"Connection failed on attempt {attempt + 1}: {str(e)}")
@@ -237,6 +283,10 @@ def main():
         
         # Load plugins
         scanner.plugins = load_plugins(config, logger)
+        if scanner.plugins:
+            logger.info(f"Successfully loaded {len(scanner.plugins)} plugin(s): {[p.name for p in scanner.plugins]}")
+        else:
+            logger.warning("No plugins loaded - measurements will not be processed")
         
         while True:
             if not scanner.scan_devices():

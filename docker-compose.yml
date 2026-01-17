@@ -7,7 +7,7 @@ services:
     network_mode: host  # Required for Bluetooth access
     privileged: true    # Required for Bluetooth access
     volumes:
-      - data_bs440_config:/app/config  # Named volume for configuration
+      - ./BS440.ini:/app/config/BS440.ini  # Mount BS440.ini from repository to container
       - /var/run/dbus:/var/run/dbus
       - /var/run/bluetooth:/var/run/bluetooth
     devices:
@@ -15,10 +15,6 @@ services:
     environment:
       - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
     # This command:
-    # 1. Copies the default BS440.ini to the config volume (if it doesn't exist)
-    # 2. Changes working directory to /app/config so the script finds BS440.ini there
-    # 3. Runs the Python script with the full path to ensure it can find its modules
-    command: sh -c "cp -n /app/BS440.ini /app/config/ && cd /app/config && python3 -u /app/ble_scanner.py"
-
-volumes:
-  bs440_config:
+    # 1. Changes working directory to /app/config so the script finds BS440.ini there
+    # 2. Runs the Python script with the full path to ensure it can find its modules
+    command: sh -c "cd /app/config && python3 -u /app/ble_scanner.py"

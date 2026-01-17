@@ -31,11 +31,11 @@ This project provides a containerized solution for connecting to Medisana scales
 
 1. Clone this repository:
    ```
-   git clone https://github.com/yourusername/BS440-Docker.git
-   cd BS440-Docker
+   git clone https://github.com/Boldfor/BS440-DOCKER.git
+   cd BS440-DOCKER
    ```
 
-2. Configure your scale's MAC address in `BS440.ini`:
+2. Configure your scale's MAC address in `BS440.ini` (edit the file in the repository):
    ```
    [BLE_Settings]
    mac_address = XX:XX:XX:XX:XX:XX
@@ -43,12 +43,16 @@ This project provides a containerized solution for connecting to Medisana scales
 
 3. Start the container:
    ```
-   docker-compose up -d
+   docker compose up -d
    ```
 
 ## Configuration
 
-After deploying the container, edit the `BS440.ini` file under /app/config/ to configure:
+Edit the `BS440.ini` file in the repository directory to configure. The file is mounted into the container, so changes take effect after restarting the container:
+
+```bash
+docker compose restart bs440
+```
 
 ```ini
 [BLE_Settings]
@@ -87,6 +91,16 @@ Data is published to the following MQTT topics:
 - `medisana/bs440/person{id}/body` - Body composition measurements (fat, muscle, etc.)
 
 ## Troubleshooting
+
+### Viewing Logs
+
+To view the container logs in real-time:
+
+```bash
+docker logs -f bs440
+```
+
+The `-f` flag follows the log output, similar to `tail -f`, which is useful for monitoring the container's activity and debugging issues.
 
 ### Bluetooth Connectivity
 
